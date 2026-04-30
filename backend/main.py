@@ -5,6 +5,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from mistralai.client import Mistral
 from dotenv import load_dotenv
+from sympy import sympify, simplify
 
 load_dotenv()
 
@@ -40,7 +41,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
     # Keep track of message history for the session
     messages = [
-        {"role": "system", "content": "You are a helpful math solver AI assistant."}
+        {"role": "system", "content": "You are a helpful math solver AI assistant. Provide simple and clear explanations for necessary concepts, and give direct answers to basic math questions. Avoid unnecessary complexity or jargon."}
     ]
 
     try:
@@ -67,9 +68,12 @@ async def websocket_endpoint(websocket: WebSocket):
                     if chunk.data.choices and chunk.data.choices[0].delta and chunk.data.choices[0].delta.content:
                         content_chunk = chunk.data.choices[0].delta.content
                         full_response += content_chunk
+
+                        # Simplify the explanation if needed
+                        full_response = simplify_explanation(full_response)
+
                         # Send chunk to frontend
                         await websocket.send_json({"chunk": content_chunk})
-                        # Small sleep to ensure chunks are sent reliably
                         await asyncio.sleep(0.01)
                 
                 # Append AI response to history
@@ -85,6 +89,20 @@ async def websocket_endpoint(websocket: WebSocket):
         print("Client disconnected")
     except Exception as e:
         print(f"WebSocket error: {e}")
+
+def simplify_explanation(response):
+    # Simplify technical explanations
+    response = response.replace("Step-by-step:", "")
+    response = response.replace("This is how we do it:", "")
+    response = response.replace("The first step is", "First, ")
+    response = response.replace("The second step is", "Then, ")
+
+    # Remove unnecessary complex terms
+    response = response.replace("quadratic equation", "a type of equation with an x² term")
+    response = response.replace("factor", "break it down")
+
+    # Further simplification can be done here depending on the complexity of responses
+    return response.strip()  # Clean up the response
 
 if __name__ == "__main__":
     import uvicorn
